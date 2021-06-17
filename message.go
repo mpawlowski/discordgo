@@ -164,6 +164,7 @@ type MessageEdit struct {
 	Content         *string                 `json:"content,omitempty"`
 	Embed           *MessageEmbed           `json:"embed,omitempty"`
 	AllowedMentions *MessageAllowedMentions `json:"allowed_mentions,omitempty"`
+	Files           []*File                 `json:"-"`
 
 	ID      string
 	Channel string

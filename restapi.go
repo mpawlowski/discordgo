@@ -1667,13 +1667,74 @@ func (s *Session) ChannelMessageEditComplex(m *MessageEdit) (st *Message, err er
 		m.Embed.Type = "rich"
 	}
 
-	response, err := s.RequestWithBucketID("PATCH", EndpointChannelMessage(m.Channel, m.ID), m, EndpointChannelMessage(m.Channel, ""))
+	var response []byte
+	if len(m.Files) > 0 {
+		body := &bytes.Buffer{}
+		bodywriter := multipart.NewWriter(body)
+
+		var payload []byte
+		payload, err = json.Marshal(m)
+		if err != nil {
+			return
+		}
+
+		var p io.Writer
+
+		h := make(textproto.MIMEHeader)
+		h.Set("Content-Disposition", `form-data; name="payload_json"`)
+		h.Set("Content-Type", "application/json")
+
+		p, err = bodywriter.CreatePart(h)
+		if err != nil {
+			return
+		}
+
+		if _, err = p.Write(payload); err != nil {
+			return
+		}
+
+		for i, file := range m.Files {
+			h := make(textproto.MIMEHeader)
+			h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file%d"; filename="%s"`, i, quoteEscaper.Replace(file.Name)))
+			contentType := file.ContentType
+			if contentType == "" {
+				contentType = "application/octet-stream"
+			}
+			h.Set("Content-Type", contentType)
+
+			p, err = bodywriter.CreatePart(h)
+			if err != nil {
+				return
+			}
+
+			if _, err = io.Copy(p, file.Reader); err != nil {
+				return
+			}
+		}
+
+		err = bodywriter.Close()
+		if err != nil {
+			return
+		}
+
+		response, err = s.request("PATCH", EndpointChannelMessage(m.Channel, m.ID), bodywriter.FormDataContentType(), body.Bytes(), EndpointChannelMessage(m.Channel, ""), 0)
+	} else {
+		response, err = s.RequestWithBucketID("PATCH", EndpointChannelMessage(m.Channel, m.ID), m, EndpointChannelMessage(m.Channel, ""))
+	}
 	if err != nil {
 		return
 	}
 
 	err = unmarshal(response, &st)
 	return
+
+	// response, err := s.RequestWithBucketID("PATCH", EndpointChannelMessage(m.Channel, m.ID), m, EndpointChannelMessage(m.Channel, ""))
+	// if err != nil {
+	// 	return
+	// }
+
+	// err = unmarshal(response, &st)
+	// return
 }
 
 // ChannelMessageEditEmbed edits an existing message with embedded data.
